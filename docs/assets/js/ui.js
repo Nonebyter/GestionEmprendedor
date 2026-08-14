@@ -109,9 +109,9 @@ export function renderNavbar({ active = '', admin = false } = {}) {
   const nav = document.getElementById('navbar');
   if (!nav) return;
   nav.innerHTML = `
-  <nav class="navbar navbar-expand-lg bg-white border-bottom sticky-top shadow-sm">
+  <nav class="navbar navbar-expand-lg navbar-dark sticky-top shadow-sm">
     <div class="container">
-      <a class="navbar-brand fw-bold text-primary" href="./index.html"><i class="bi bi-shop"></i> ${escapeHtml(BUSINESS.name)}</a>
+      <a class="navbar-brand fw-bold" href="./index.html"><i class="bi bi-shop"></i> ${escapeHtml(BUSINESS.name)}</a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu"><span class="navbar-toggler-icon"></span></button>
       <div class="collapse navbar-collapse" id="navMenu">
         <ul class="navbar-nav me-auto">

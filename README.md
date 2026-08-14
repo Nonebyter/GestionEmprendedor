@@ -1,59 +1,58 @@
-# Sistema de Gestion (PWA)
+# Sistema de Gestion (PWA + Firebase)
 
-Inventario, compras, ventas, catalogo y pedidos para un emprendimiento.
-Flask + Firebase Firestore + Bootstrap 5, instalable como app (PWA).
+Catalogo publico, pedidos sin registro e inventario con compras, ventas y resumen semanal.
+Es un sitio **100% estatico** (HTML + Bootstrap + Firebase Web SDK), pensado para GitHub Pages.
 
-## Puesta en marcha
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\pip install -r requirements.txt
-.\.venv\Scripts\python app.py
+```
+docs/            <- el sitio que publica GitHub Pages
+firestore.rules  <- reglas de seguridad a pegar en la consola de Firebase
 ```
 
-Abrir http://localhost:5000
+## 1. Publicar en GitHub Pages
 
-## Configurar Firebase (obligatorio la primera vez)
+En el repositorio: **Settings -> Pages -> Source: Deploy from a branch**,
+rama `Main` y carpeta `/docs`. Guardar. La URL queda como
+`https://<usuario>.github.io/<repositorio>/`.
 
-1. En la [consola de Firebase](https://console.firebase.google.com/project/gestionemprendedor/firestore) crear la base de datos **Firestore**.
-2. En **Reglas**, mientras se prueba:
+## 2. Configurar Firebase
 
-   ```
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       match /{document=**} { allow read, write: if true; }
-     }
-   }
-   ```
+En [console.firebase.google.com](https://console.firebase.google.com/project/gestionemprendedor):
 
-3. Recargar la app.
+1. **Firestore Database -> Reglas**: pegar el contenido de `firestore.rules` y publicar.
+2. **Authentication -> Sign-in method**: habilitar **Correo electronico/contrasena**.
+3. **Authentication -> Users -> Agregar usuario**: crear el correo y contrasena del admin.
+4. **Authentication -> Settings -> Dominios autorizados**: agregar `<usuario>.github.io`.
 
-Opcion mas segura para produccion: descargar `serviceAccountKey.json`
-(Configuracion del proyecto -> Cuentas de servicio), guardarlo en la raiz e instalar
-`firebase-admin`. La app lo detecta y deja de usar la API publica.
+## 3. Personalizar
 
-## Acceso admin
+En `docs/assets/js/firebase.js`:
 
-Definido en `.env` (copiar de `.env.example`). Por defecto `admin` / `admin123`.
+```js
+export const BUSINESS = {
+  name: "Mi Emprendimiento",
+  phone: "",        // ej: 50588887777 para el boton de WhatsApp
+  currency: "$"
+};
+```
 
 ## Como funciona
 
 - **Compras**: al registrar una compra se crea o actualiza el producto (nombre, categoria,
-  precio, foto, descripcion) y se **suma** el stock. La foto es la que se ve en el catalogo.
-- **Catalogo** (publico): tarjetas con foto, nombre, precio, descripcion, boton *Ordenar* y cesta
-  guardada en el navegador.
-- **Pedido**: el cliente pone nombre, telefono y direccion. No hay pago en linea.
-  El pedido entra como **Nuevo**; el admin lo pasa a Visto / Confirmado / Entregado / Cancelado.
-- **Confirmado** registra automaticamente la venta y **descuenta** el stock (una sola vez).
-- **Mis pedidos** (publico): sin login, con nombre + telefono se consulta el estado.
+  precio, descripcion, foto) y se **suma** el stock. Esa foto es la que aparece en el catalogo.
+- **Catalogo** (publico): buscador, filtro por categoria, boton *Ordenar* y cesta en el navegador.
+- **Pedido**: el cliente deja nombre, telefono y direccion. Sin pago en linea.
+- **Estados**: nuevo -> visto -> confirmado -> entregado / cancelado.
+  Al marcar **confirmado** se registra la venta y se **descuenta** el stock (solo una vez).
+- **Mis pedidos**: consulta publica con nombre + telefono, sin login.
 - **Resumen semanal**: ventas, compras, ganancia, valor del inventario, mas vendidos y stock bajo.
 
-## Colecciones en Firestore
+Colecciones en Firestore: `products`, `purchases`, `sales`, `orders`.
+Las fotos se comprimen en el navegador y se guardan dentro del documento del producto,
+asi no hace falta activar Firebase Storage.
 
-`products`, `purchases`, `sales`, `orders`.
+## Probar en local
 
-## Imagenes
-
-Se guardan en `static/uploads/`. En hosting efimero (Render, Heroku) conviene montar un
-disco persistente o migrar a Firebase Storage.
+```powershell
+cd docs
+python -m http.server 5500
+```

@@ -105,11 +105,18 @@ async function cargarResumen() {
     data: {
       labels: s.labels,
       datasets: [
-        { label: 'Ventas', data: s.salesSeries, backgroundColor: '#0d6efd' },
-        { label: 'Compras', data: s.purchaseSeries, backgroundColor: '#ffc107' }
+        { label: 'Ventas', data: s.salesSeries, backgroundColor: '#8c4a2f' },
+        { label: 'Compras', data: s.purchaseSeries, backgroundColor: '#a8894f' }
       ]
     },
-    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, grid: { color: 'rgba(120,96,62,.15)' }, ticks: { color: '#7b6d5d' } },
+        x: { grid: { display: false }, ticks: { color: '#7b6d5d' } }
+      },
+      plugins: { legend: { labels: { color: '#2f2925' } } }
+    }
   });
 }
 
