@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Mis pedidos · {{ business_name }}{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <h1 class="h3 mb-1">Consultar mis pedidos</h1>
+    <p class="text-muted">Ingresa el nombre y telefono que usaste al ordenar.</p>
+
+    <form method="post" class="row g-2 mb-4">
+      <div class="col-12 col-md-5">
+        <input class="form-control" name="name" value="{{ name }}" placeholder="Nombre completo" required>
+      </div>
+      <div class="col-12 col-md-4">
+        <input class="form-control" name="phone" value="{{ phone }}" placeholder="Telefono" inputmode="tel" required>
+      </div>
+      <div class="col-12 col-md-3 d-grid">
+        <button class="btn btn-primary"><i class="bi bi-search"></i> Buscar</button>
+      </div>
+    </form>
+
+    {% if searched and not orders %}
+      <div class="alert alert-warning">
+        No encontramos pedidos con esos datos. Revisa que el nombre y telefono sean los mismos que usaste.
+      </div>
+    {% endif %}
+
+    {% for order in orders %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h2 class="h6 mb-1">Pedido #{{ order.code }}</h2>
+            <small class="text-muted">{{ order.created_at|fecha }}</small>
+          </div>
+          <span class="badge text-bg-{{ status_color.get(order.status, 'secondary') }}">
+            {{ status_label.get(order.status, order.status) }}
+          </span>
+        </div>
+        <ul class="list-unstyled small mt-2 mb-2">
+          {% for item in order['items'] %}
+          <li>{{ item.qty }} x {{ item.name }} — {{ item.subtotal|money }}</li>
+          {% endfor %}
+        </ul>
+        <div class="d-flex justify-content-between align-items-center">
+          <strong class="text-primary">{{ order.total|money }}</strong>
+          <a href="{{ url_for('order_detail', order_id=order.id) }}" class="btn btn-sm btn-outline-primary">Ver detalle</a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

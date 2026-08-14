@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Configurar Firebase{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm border-warning">
+      <div class="card-body">
+        <h1 class="h4"><i class="bi bi-database-exclamation text-warning"></i> Falta configurar Firestore</h1>
+        <p class="text-muted">La app se conecta a Firebase pero la base de datos aun no responde.</p>
+        <ol class="small">
+          <li>Entra a <a href="https://console.firebase.google.com/project/{{ project_id }}/firestore" target="_blank">Firestore del proyecto {{ project_id }}</a> y crea la base de datos (modo produccion o prueba).</li>
+          <li>En la pestana <strong>Reglas</strong> permite lectura y escritura mientras pruebas:
+            <pre class="bg-light p-2 mt-1 rounded small">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} { allow read, write: if true; }
+  }
+}</pre>
+          </li>
+          <li>Recarga esta pagina.</li>
+        </ol>
+        <p class="small mb-0">
+          Alternativa mas segura: descarga un <strong>serviceAccountKey.json</strong> desde
+          Configuracion del proyecto &rarr; Cuentas de servicio, guardalo en la raiz del proyecto e instala
+          <code>firebase-admin</code>.
+        </p>
+        <hr>
+        <p class="small text-muted mb-0">Detalle tecnico: {{ detail }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

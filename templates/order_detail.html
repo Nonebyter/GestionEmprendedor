@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Pedido {{ order.code }} · {{ business_name }}{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+          <div>
+            <h1 class="h4 mb-1">Pedido #{{ order.code }}</h1>
+            <p class="text-muted mb-0">{{ order.created_at|fecha }}</p>
+          </div>
+          <span class="badge text-bg-{{ status_color.get(order.status, 'secondary') }} fs-6">
+            {{ status_label.get(order.status, order.status) }}
+          </span>
+        </div>
+
+        <hr>
+        <dl class="row mb-0 small">
+          <dt class="col-4 col-sm-3">Cliente</dt><dd class="col-8 col-sm-9">{{ order.customer_name }}</dd>
+          <dt class="col-4 col-sm-3">Telefono</dt><dd class="col-8 col-sm-9">{{ order.phone }}</dd>
+          {% if order.address %}<dt class="col-4 col-sm-3">Entrega</dt><dd class="col-8 col-sm-9">{{ order.address }}</dd>{% endif %}
+          {% if order.note %}<dt class="col-4 col-sm-3">Nota</dt><dd class="col-8 col-sm-9">{{ order.note }}</dd>{% endif %}
+        </dl>
+
+        <hr>
+        <ul class="list-group list-group-flush">
+          {% for item in order['items'] %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span>{{ item.qty }} x {{ item.name }}</span>
+            <strong>{{ item.subtotal|money }}</strong>
+          </li>
+          {% endfor %}
+          <li class="list-group-item d-flex justify-content-between px-0 fs-5">
+            <strong>Total</strong><strong class="text-primary">{{ order.total|money }}</strong>
+          </li>
+        </ul>
+
+        <div class="alert alert-info mt-3 mb-0 small">
+          <i class="bi bi-info-circle"></i> Guarda tu nombre y telefono para consultar el estado en
+          <a href="{{ url_for('track_orders', name=order.customer_name, phone=order.phone) }}">Mis pedidos</a>.
+        </div>
+
+        {% if business_phone %}
+        <a class="btn btn-success w-100 mt-3"
+           target="_blank"
+           href="https://wa.me/{{ business_phone }}?text=Hola,%20hice%20el%20pedido%20%23{{ order.code }}">
+          <i class="bi bi-whatsapp"></i> Escribir al vendedor
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="text-center mt-3">
+      <a href="{{ url_for('catalog') }}" class="btn btn-outline-primary">Volver al catalogo</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

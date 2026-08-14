@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+serviceAccountKey.json
+static/uploads/*
+!static/uploads/.gitkeep

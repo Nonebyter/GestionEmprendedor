@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}No encontrado{% endblock %}
+{% block content %}
+<div class="text-center py-5">
+  <i class="bi bi-question-circle display-3 text-muted"></i>
+  <h1 class="h4 mt-3">Pagina no encontrada</h1>
+  <a href="{{ url_for('catalog') }}" class="btn btn-primary mt-2">Ir al catalogo</a>
+</div>
+{% endblock %}
