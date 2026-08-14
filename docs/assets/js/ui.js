@@ -18,11 +18,13 @@ export const STATUS_LABEL = {
   nuevo: 'Nuevo',
   visto: 'Visto por el vendedor',
   confirmado: 'Confirmado',
+  vendido: 'Vendido',
   entregado: 'Entregado',
   cancelado: 'Cancelado'
 };
 export const STATUS_COLOR = {
-  nuevo: 'danger', visto: 'warning', confirmado: 'info', entregado: 'success', cancelado: 'secondary'
+  nuevo: 'danger', visto: 'warning', confirmado: 'info',
+  vendido: 'success', entregado: 'primary', cancelado: 'secondary'
 };
 export const STATUSES = Object.keys(STATUS_LABEL);
 
@@ -55,6 +57,35 @@ export function loading(show, text = 'Cargando...') {
   }
   el.querySelector('#app-loader-text').textContent = text;
   el.classList.toggle('d-none', !show);
+}
+
+// Muestra la foto del producto completa, sin recortes.
+export function openImage(src, title = '') {
+  if (!src) return;
+  let el = document.getElementById('img-lightbox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'img-lightbox';
+    el.className = 'modal fade';
+    el.tabIndex = -1;
+    el.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content lightbox-content">
+          <div class="modal-header border-0 pb-1">
+            <h5 class="modal-title h6"></h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body text-center pt-0">
+            <img class="lightbox-img" alt="">
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+  }
+  el.querySelector('img').src = src;
+  el.querySelector('img').alt = title;
+  el.querySelector('.modal-title').textContent = title;
+  bootstrap.Modal.getOrCreateInstance(el).show();
 }
 
 export function filterList(inputId, containerId, itemSelector = '[data-key]') {

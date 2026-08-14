@@ -30,6 +30,7 @@ const box = document.getElementById('detalle');
         <dl class="row mb-0 small">
           <dt class="col-4 col-sm-3">Cliente</dt><dd class="col-8 col-sm-9">${escapeHtml(o.customer_name)}</dd>
           <dt class="col-4 col-sm-3">Telefono</dt><dd class="col-8 col-sm-9">${escapeHtml(o.phone)}</dd>
+          ${o.email ? `<dt class="col-4 col-sm-3">Correo</dt><dd class="col-8 col-sm-9">${escapeHtml(o.email)}</dd>` : ''}
           ${o.address ? `<dt class="col-4 col-sm-3">Entrega</dt><dd class="col-8 col-sm-9">${escapeHtml(o.address)}</dd>` : ''}
           ${o.note ? `<dt class="col-4 col-sm-3">Nota</dt><dd class="col-8 col-sm-9">${escapeHtml(o.note)}</dd>` : ''}
         </dl>

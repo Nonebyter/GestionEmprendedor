@@ -1,6 +1,6 @@
 import { listProducts } from '../store.js';
 import { BUSINESS } from '../firebase.js';
-import { money, escapeHtml, normalize, renderNavbar, showToast, loading, registerServiceWorker } from '../ui.js';
+import { money, escapeHtml, normalize, renderNavbar, showToast, loading, openImage, registerServiceWorker } from '../ui.js';
 import * as Cart from '../cart.js';
 
 renderNavbar({ active: './index.html' });
@@ -14,9 +14,10 @@ function card(p) {
   return `
   <div class="col-6 col-md-4 col-lg-3">
     <div class="card h-100 product-card shadow-sm">
-      <div class="product-img-wrap">
+      <div class="product-img-wrap${p.image_url ? ' zoomable' : ''}" ${p.image_url ? `data-zoom="${p.id}"` : ''}>
         ${p.image_url
-          ? `<img src="${p.image_url}" class="product-img" alt="${escapeHtml(p.name)}" loading="lazy">`
+          ? `<img src="${p.image_url}" class="product-img" alt="${escapeHtml(p.name)}" loading="lazy">
+             <span class="zoom-hint"><i class="bi bi-arrows-fullscreen"></i></span>`
           : '<div class="product-img d-flex align-items-center justify-content-center bg-light text-muted"><i class="bi bi-image fs-1"></i></div>'}
         ${sinStock ? '<span class="badge text-bg-secondary position-absolute top-0 start-0 m-2">Sin stock</span>' : ''}
       </div>
@@ -51,6 +52,13 @@ function render() {
     btn.addEventListener('click', () => {
       const p = products.find((x) => x.id === btn.dataset.add);
       Cart.add({ id: p.id, name: p.name, price: Number(p.price || 0), image: p.image_url || '' });
+    });
+  });
+
+  document.querySelectorAll('[data-zoom]').forEach((box) => {
+    box.addEventListener('click', () => {
+      const p = products.find((x) => x.id === box.dataset.zoom);
+      openImage(p.image_url, p.name);
     });
   });
 }

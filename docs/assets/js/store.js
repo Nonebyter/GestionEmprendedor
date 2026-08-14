@@ -7,8 +7,12 @@ import {
 
 const COL = { products: 'products', purchases: 'purchases', sales: 'sales', orders: 'orders' };
 
-const nowIso = () => new Date().toISOString().slice(0, 19);
-export const todayStr = () => new Date().toISOString().slice(0, 10);
+// Fechas en hora local: con UTC las ventas de la tarde caian en el dia siguiente
+// y quedaban fuera del resumen.
+const pad = (n) => String(n).padStart(2, '0');
+const localDay = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const nowIso = () => `${localDay()}T${pad(new Date().getHours())}:${pad(new Date().getMinutes())}:${pad(new Date().getSeconds())}`;
+export const todayStr = () => localDay();
 const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 const int = (v) => Math.trunc(num(v));
 const newCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -210,6 +214,7 @@ export async function createOrder(payload) {
     customer_key: normalize(name),
     phone,
     phone_key: normalizePhone(phone),
+    email: (payload.email || '').trim().toLowerCase(),
     address: (payload.address || '').trim(),
     note: (payload.note || '').trim(),
     items,
@@ -228,7 +233,7 @@ export async function updateOrderStatus(orderId, status) {
 
   await updateDoc(doc(db, COL.orders, orderId), { status, updated_at: nowIso() });
 
-  if (status === 'confirmado' && !order.sales_registered) {
+  if (status === 'vendido' && !order.sales_registered) {
     for (const item of order.items || []) {
       await registerSale({
         product_id: item.product_id,
@@ -242,6 +247,8 @@ export async function updateOrderStatus(orderId, status) {
   }
   return { ...order, status };
 }
+
+export const markOrderSold = (orderId) => updateOrderStatus(orderId, 'vendido');
 
 export async function findOrders(name, phone) {
   const phoneKey = normalizePhone(phone);
@@ -263,48 +270,52 @@ const inRange = (value, start, end) => {
   return d >= start && d <= end;
 };
 
-export async function weeklySummary(days = 7) {
+export async function monthlySummary(reference = new Date()) {
   const [products, sales, purchases, orders] = await Promise.all([
     listProducts(), listSales(), listPurchases(), listOrders()
   ]);
 
-  const end = new Date(); end.setHours(0, 0, 0, 0);
-  const start = new Date(end); start.setDate(start.getDate() - (days - 1));
-  const iso = (d) => d.toISOString().slice(0, 10);
-  const s0 = iso(start), s1 = iso(end);
+  const year = reference.getFullYear();
+  const month = reference.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const s0 = localDay(new Date(year, month, 1));
+  const s1 = localDay(new Date(year, month, daysInMonth));
 
-  const weekSales = sales.filter((s) => inRange(s.date, s0, s1));
-  const weekPurchases = purchases.filter((p) => inRange(p.date, s0, s1));
-  const weekOrders = orders.filter((o) => inRange(o.created_at, s0, s1));
+  const monthSales = sales.filter((s) => inRange(s.date, s0, s1));
+  const monthPurchases = purchases.filter((p) => inRange(p.date, s0, s1));
+  const monthOrders = orders.filter((o) => inRange(o.created_at, s0, s1));
 
   const labels = [], salesSeries = [], purchaseSeries = [];
-  for (let i = 0; i < days; i++) {
-    const day = new Date(start); day.setDate(start.getDate() + i);
-    const key = iso(day);
-    labels.push(`${String(day.getDate()).padStart(2, '0')}/${String(day.getMonth() + 1).padStart(2, '0')}`);
-    salesSeries.push(Number(weekSales.filter((s) => String(s.date).slice(0, 10) === key)
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = localDay(new Date(year, month, day));
+    labels.push(String(day));
+    salesSeries.push(Number(monthSales.filter((s) => String(s.date).slice(0, 10) === key)
       .reduce((a, s) => a + num(s.total), 0).toFixed(2)));
-    purchaseSeries.push(Number(weekPurchases.filter((p) => String(p.date).slice(0, 10) === key)
+    purchaseSeries.push(Number(monthPurchases.filter((p) => String(p.date).slice(0, 10) === key)
       .reduce((a, p) => a + num(p.total), 0).toFixed(2)));
   }
 
   const top = {};
-  for (const s of weekSales) {
+  for (const s of monthSales) {
     const k = s.product_name || '-';
     top[k] = top[k] || { name: k, qty: 0, total: 0 };
     top[k].qty += int(s.quantity);
     top[k].total = Number((top[k].total + num(s.total)).toFixed(2));
   }
 
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
   return {
-    range: `${s0.split('-').reverse().join('/')} - ${s1.split('-').reverse().join('/')}`,
+    range: `${MESES[month]} ${year}`,
     labels, salesSeries, purchaseSeries,
-    totalSales: Number(weekSales.reduce((a, s) => a + num(s.total), 0).toFixed(2)),
-    totalPurchases: Number(weekPurchases.reduce((a, p) => a + num(p.total), 0).toFixed(2)),
-    profit: Number(weekSales.reduce((a, s) => a + num(s.profit), 0).toFixed(2)),
-    salesCount: weekSales.length,
-    ordersCount: weekOrders.length,
+    totalSales: Number(monthSales.reduce((a, s) => a + num(s.total), 0).toFixed(2)),
+    totalPurchases: Number(monthPurchases.reduce((a, p) => a + num(p.total), 0).toFixed(2)),
+    profit: Number(monthSales.reduce((a, s) => a + num(s.profit), 0).toFixed(2)),
+    salesCount: monthSales.length,
+    ordersCount: monthOrders.length,
     newOrders: orders.filter((o) => o.status === 'nuevo').length,
+    pendingOrders: orders.filter((o) => ['nuevo', 'visto', 'confirmado'].includes(o.status)).length,
     topProducts: Object.values(top).sort((a, b) => b.total - a.total).slice(0, 5),
     inventoryValue: Number(products.reduce((a, p) => a + num(p.cost) * int(p.stock), 0).toFixed(2)),
     productsCount: products.length,

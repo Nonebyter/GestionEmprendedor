@@ -1,5 +1,5 @@
 /* Service worker: cachea la app para que abra rapido y funcione offline parcialmente. */
-const CACHE = 'gestion-static-v1';
+const CACHE = 'gestion-static-v2';
 const ASSETS = [
   './', './index.html', './carrito.html', './pedido.html', './mis-pedidos.html', './admin.html',
   './assets/css/style.css',

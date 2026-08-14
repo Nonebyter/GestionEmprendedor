@@ -136,6 +136,23 @@ hr { border-color: var(--v-line); opacity: .6; }
 .min-w-0 { min-width: 0; }
 .bg-light { background-color: var(--v-surface-2) !important; }
 
+/* -------------------------------------------------------- imagen ampliada */
+.zoomable { cursor: zoom-in; }
+.zoom-hint {
+  position: absolute; right: .5rem; bottom: .5rem;
+  background: rgba(42, 37, 33, .65); color: #f4ecdc;
+  border-radius: .35rem; padding: .1rem .4rem; font-size: .8rem;
+  opacity: 0; transition: opacity .15s ease; pointer-events: none;
+}
+.product-card:hover .zoom-hint { opacity: 1; }
+@media (hover: none) { .zoom-hint { opacity: .85; } }
+
+.lightbox-content { background-color: var(--v-surface); border-color: var(--v-line); }
+.lightbox-img {
+  max-width: 100%; max-height: 78vh; object-fit: contain;
+  border-radius: .4rem; border: 1px solid var(--v-line);
+}
+
 .fab-cart {
   position: fixed; right: 1rem; bottom: 1rem; width: 56px; height: 56px;
   display: flex; align-items: center; justify-content: center; font-size: 1.4rem; z-index: 1030;

@@ -4,10 +4,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   listProducts, saveProduct, deleteProduct, listPurchases, registerPurchase, deletePurchase,
-  listSales, registerSale, deleteSale, listOrders, updateOrderStatus, weeklySummary, todayStr
+  listSales, registerSale, deleteSale, listOrders, updateOrderStatus, markOrderSold, monthlySummary, todayStr
 } from '../store.js';
 import {
-  money, escapeHtml, fechaCorta, compressImage, showToast, loading,
+  money, escapeHtml, fechaCorta, compressImage, showToast, loading, openImage, normalize, normalizePhone,
   filterList, renderNavbar, registerServiceWorker, STATUSES, STATUS_LABEL, STATUS_COLOR
 } from '../ui.js';
 
@@ -17,7 +17,9 @@ document.getElementById('footer').textContent = `${BUSINESS.name} · Panel de ad
 
 const $ = (id) => document.getElementById(id);
 const SECTIONS = ['resumen', 'inventario', 'compras', 'ventas', 'pedidos'];
-let productos = [], chart = null, filtroPedidos = '';
+// Pedidos que siguen requiriendo atencion; los vendidos salen de la vista por defecto.
+const PEDIDOS_ACTIVOS = ['nuevo', 'visto', 'confirmado'];
+let productos = [], chart = null, filtroPedidos = '', busquedaPedidos = '';
 
 // ------------------------------------------------------------------ sesion
 document.getElementById('btn-logout')?.addEventListener('click', () => signOut(auth));
@@ -58,7 +60,7 @@ mostrarSeccion(location.hash.slice(1));
 
 // ------------------------------------------------------------------ resumen
 async function cargarResumen() {
-  const s = await weeklySummary();
+  const s = await monthlySummary();
   $('rango').textContent = s.range;
 
   $('alerta-pedidos').innerHTML = s.newOrders
@@ -70,8 +72,8 @@ async function cargarResumen() {
   if (badge) { badge.textContent = s.newOrders; badge.classList.toggle('d-none', !s.newOrders); }
 
   const cards = [
-    ['Ventas (7 dias)', money(s.totalSales), 'bi-graph-up-arrow', 'primary'],
-    ['Compras (7 dias)', money(s.totalPurchases), 'bi-cart-plus', 'warning'],
+    ['Ventas del mes', money(s.totalSales), 'bi-graph-up-arrow', 'primary'],
+    ['Compras del mes', money(s.totalPurchases), 'bi-cart-plus', 'warning'],
     ['Ganancia estimada', money(s.profit), 'bi-piggy-bank', 'success'],
     ['Valor del inventario', money(s.inventoryValue), 'bi-box-seam', 'info']
   ];
@@ -85,7 +87,7 @@ async function cargarResumen() {
         <li class="list-group-item d-flex justify-content-between px-0">
           <span class="text-truncate">${escapeHtml(p.name)} <span class="text-muted small">x${p.qty}</span></span>
           <strong>${money(p.total)}</strong></li>`).join('')}</ul>`
-    : '<p class="text-muted small mb-0">Aun no hay ventas esta semana.</p>';
+    : '<p class="text-muted small mb-0">Aun no hay ventas este mes.</p>';
 
   $('stock-bajo').innerHTML = s.lowStock.length
     ? `<ul class="list-group list-group-flush">${s.lowStock.map((p) => `
@@ -97,6 +99,7 @@ async function cargarResumen() {
   $('actividad').innerHTML = `<ul class="list-group list-group-flush">
     <li class="list-group-item d-flex justify-content-between px-0">Ventas registradas <strong>${s.salesCount}</strong></li>
     <li class="list-group-item d-flex justify-content-between px-0">Pedidos recibidos <strong>${s.ordersCount}</strong></li>
+    <li class="list-group-item d-flex justify-content-between px-0">Pedidos pendientes de venta <strong>${s.pendingOrders}</strong></li>
     <li class="list-group-item d-flex justify-content-between px-0">Productos en catalogo <strong>${s.productsCount}</strong></li></ul>`;
 
   chart?.destroy();
@@ -127,7 +130,7 @@ async function cargarProductos() {
   $('tb-productos').innerHTML = productos.length ? productos.map((p) => `
     <tr data-key="${escapeHtml(p.name + ' ' + (p.category || ''))}">
       <td style="width:56px">${p.image_url
-        ? `<img src="${p.image_url}" class="thumb" alt="">`
+        ? `<img src="${p.image_url}" class="thumb zoomable" data-zoom="${p.id}" alt="">`
         : '<div class="thumb bg-light d-flex align-items-center justify-content-center text-muted"><i class="bi bi-image"></i></div>'}</td>
       <td><div class="fw-semibold">${escapeHtml(p.name)}</div>
         <div class="small text-muted text-truncate" style="max-width:240px">${escapeHtml(p.description || '')}</div></td>
@@ -156,6 +159,11 @@ async function cargarProductos() {
 
   document.querySelectorAll('[data-edit]').forEach((b) =>
     b.addEventListener('click', () => abrirProducto(productos.find((p) => p.id === b.dataset.edit))));
+  document.querySelectorAll('[data-zoom]').forEach((img) =>
+    img.addEventListener('click', () => {
+      const p = productos.find((x) => x.id === img.dataset.zoom);
+      openImage(p.image_url, p.name);
+    }));
   document.querySelectorAll('[data-del-prod]').forEach((b) =>
     b.addEventListener('click', async () => {
       if (!confirm('Eliminar este producto?')) return;
@@ -308,17 +316,37 @@ async function cargarVentas() {
 
 // ------------------------------------------------------------------ pedidos
 function renderFiltrosPedidos() {
-  $('filtros-pedidos').innerHTML =
-    `<button class="btn btn-outline-secondary ${!filtroPedidos ? 'active' : ''}" data-filtro="">Todos</button>` +
-    STATUSES.map((s) => `<button class="btn btn-outline-secondary ${filtroPedidos === s ? 'active' : ''}" data-filtro="${s}">${STATUS_LABEL[s]}</button>`).join('');
+  const opciones = [['', 'Pendientes'], ...STATUSES.map((s) => [s, STATUS_LABEL[s]]), ['all', 'Todos']];
+  $('filtros-pedidos').innerHTML = opciones.map(([valor, texto]) =>
+    `<button class="btn btn-outline-secondary ${filtroPedidos === valor ? 'active' : ''}" data-filtro="${valor}">${texto}</button>`).join('');
   document.querySelectorAll('[data-filtro]').forEach((b) =>
     b.addEventListener('click', () => { filtroPedidos = b.dataset.filtro; cargarPedidos(); }));
 }
 
+function filtrarPedidos(todos) {
+  const texto = busquedaPedidos.trim();
+  if (texto) {
+    const terminos = normalize(texto).split(/\s+/).filter(Boolean);
+    const digitos = normalizePhone(texto);
+    return todos.filter((o) => {
+      const telefono = o.phone_key || normalizePhone(o.phone);
+      if (digitos.length >= 4 && telefono.includes(digitos)) return true;
+      const clave = normalize(`${o.code} ${o.customer_name} ${o.email || ''} ${o.phone}`);
+      return terminos.every((t) => clave.includes(t));
+    });
+  }
+  if (filtroPedidos === 'all') return todos;
+  if (filtroPedidos) return todos.filter((o) => o.status === filtroPedidos);
+  return todos.filter((o) => PEDIDOS_ACTIVOS.includes(o.status));
+}
+
 async function cargarPedidos() {
   renderFiltrosPedidos();
-  const pedidos = await listOrders(filtroPedidos);
+  const pedidos = filtrarPedidos(await listOrders());
   $('pedidos-vacio').classList.toggle('d-none', pedidos.length > 0);
+  $('pedidos-vacio-msg').textContent = busquedaPedidos.trim()
+    ? 'Ningun pedido coincide con esa busqueda.'
+    : 'No hay pedidos pendientes. Los vendidos se consultan con el buscador.';
 
   $('lista-pedidos').innerHTML = pedidos.map((o) => `
     <div class="col-12 col-lg-6">
@@ -338,6 +366,7 @@ async function cargarPedidos() {
               <a class="ms-2 text-success" target="_blank"
                  href="https://wa.me/${o.phone_key || ''}?text=${encodeURIComponent(`Hola ${o.customer_name}, sobre tu pedido #${o.code}`)}">
                  <i class="bi bi-whatsapp"></i> WhatsApp</a></div>
+            ${o.email ? `<div><i class="bi bi-envelope"></i> <a href="mailto:${escapeHtml(o.email)}">${escapeHtml(o.email)}</a></div>` : ''}
             ${o.address ? `<div><i class="bi bi-geo-alt"></i> ${escapeHtml(o.address)}</div>` : ''}
             ${o.note ? `<div class="text-muted"><i class="bi bi-chat-left-text"></i> ${escapeHtml(o.note)}</div>` : ''}
           </div>
@@ -351,16 +380,31 @@ async function cargarPedidos() {
             <select class="form-select form-select-sm" data-status-select="${o.id}">
               ${STATUSES.map((s) => `<option value="${s}" ${o.status === s ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}
             </select>
-            <button class="btn btn-sm btn-primary text-nowrap" data-status-save="${o.id}"><i class="bi bi-check2"></i> Actualizar</button>
+            <button class="btn btn-sm btn-outline-secondary text-nowrap" data-status-save="${o.id}"><i class="bi bi-check2"></i> Actualizar</button>
           </div>
-          <div class="form-text mt-1 ${o.sales_registered ? 'text-success' : ''}">
-            ${o.sales_registered
-              ? '<i class="bi bi-check-circle"></i> Venta ya registrada.'
-              : 'Al marcar <strong>Confirmado</strong> se registra la venta y se descuenta el stock.'}
-          </div>
+          ${o.sales_registered
+            ? '<div class="form-text mt-2 text-success"><i class="bi bi-check-circle"></i> Venta registrada y stock descontado.</div>'
+            : `<button class="btn btn-success w-100 mt-2" data-vendido="${o.id}">
+                 <i class="bi bi-cash-coin"></i> Marcar como vendido</button>
+               <div class="form-text mt-1">Registra la venta en el resumen y descuenta el stock.</div>`}
         </div>
       </div>
     </div>`).join('');
+
+  document.querySelectorAll('[data-vendido]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (!confirm('Marcar el pedido como vendido? Se registrara la venta y se descontara el stock.')) return;
+      loading(true, 'Registrando venta...');
+      try {
+        await markOrderSold(b.dataset.vendido);
+        showToast('Venta registrada');
+        await cargarTodo();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      } finally {
+        loading(false);
+      }
+    }));
 
   document.querySelectorAll('[data-status-save]').forEach((b) =>
     b.addEventListener('click', async () => {
@@ -398,3 +442,15 @@ $('v-fecha').value = todayStr();
 filterList('f-productos', 'tb-productos', 'tr[data-key]');
 filterList('f-compras', 'tb-compras', 'tr[data-key]');
 filterList('f-ventas', 'tb-ventas', 'tr[data-key]');
+
+let debouncePedidos;
+$('f-pedidos').addEventListener('input', (e) => {
+  busquedaPedidos = e.target.value;
+  clearTimeout(debouncePedidos);
+  debouncePedidos = setTimeout(cargarPedidos, 250);
+});
+$('f-pedidos-limpiar').addEventListener('click', () => {
+  $('f-pedidos').value = '';
+  busquedaPedidos = '';
+  cargarPedidos();
+});
