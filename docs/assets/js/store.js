@@ -151,6 +151,11 @@ export async function registerSale(data) {
   const unitPrice = num(data.unit_price) || num(product.price);
   const unitCost = num(product.cost);
 
+  const disponible = int(product.stock);
+  if (quantity > disponible) {
+    throw new Error(`Stock insuficiente de "${product.name}": pides ${quantity} y hay ${disponible}.`);
+  }
+
   await addDoc(collection(db, COL.sales), {
     product_id: product.id,
     product_name: product.name || '',
@@ -196,16 +201,25 @@ export async function createOrder(payload) {
   if (!payload.items?.length) throw new Error('Tu cesta esta vacia.');
 
   const items = [];
+  const sinStock = [];
   let total = 0;
   for (const raw of payload.items) {
     const product = await getProduct(String(raw.id));
     if (!product || product.active === false) continue;
     const qty = Math.max(1, int(raw.qty) || 1);
+    const disponible = int(product.stock);
+    if (qty > disponible) {
+      sinStock.push(disponible > 0
+        ? `${product.name}: solo quedan ${disponible}`
+        : `${product.name}: agotado`);
+      continue;
+    }
     const price = num(product.price);
     const subtotal = Number((price * qty).toFixed(2));
     total += subtotal;
     items.push({ product_id: product.id, name: product.name || '', price, qty, subtotal });
   }
+  if (sinStock.length) throw new Error(`Sin disponibilidad. ${sinStock.join('. ')}. Ajusta tu cesta.`);
   if (!items.length) throw new Error('Los productos ya no estan disponibles.');
 
   const order = {
@@ -231,9 +245,30 @@ export async function updateOrderStatus(orderId, status) {
   const order = await getOrder(orderId);
   if (!order) return null;
 
+  const registrarVenta = status === 'vendido' && !order.sales_registered;
+
+  // Se valida todo el pedido antes de tocar nada para no dejar ventas a medias.
+  if (registrarVenta) {
+    const faltantes = [];
+    for (const item of order.items || []) {
+      const product = await getProduct(item.product_id);
+      if (!product) {
+        faltantes.push(`${item.name}: ya no existe en el inventario`);
+        continue;
+      }
+      const disponible = int(product.stock);
+      if (int(item.qty) > disponible) {
+        faltantes.push(`${product.name}: pide ${int(item.qty)} y hay ${disponible}`);
+      }
+    }
+    if (faltantes.length) {
+      throw new Error(`No se puede vender por falta de stock. ${faltantes.join('. ')}. Registra la compra primero.`);
+    }
+  }
+
   await updateDoc(doc(db, COL.orders, orderId), { status, updated_at: nowIso() });
 
-  if (status === 'vendido' && !order.sales_registered) {
+  if (registrarVenta) {
     for (const item of order.items || []) {
       await registerSale({
         product_id: item.product_id,
@@ -249,6 +284,8 @@ export async function updateOrderStatus(orderId, status) {
 }
 
 export const markOrderSold = (orderId) => updateOrderStatus(orderId, 'vendido');
+
+export const deleteOrder = (id) => deleteDoc(doc(db, COL.orders, id));
 
 export async function findOrders(name, phone) {
   const phoneKey = normalizePhone(phone);

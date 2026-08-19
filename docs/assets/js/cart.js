@@ -27,14 +27,29 @@ export const clear = () => write([]);
 export function add(product) {
   const list = read();
   const found = list.find((i) => i.id === product.id);
-  if (found) found.qty += 1;
-  else list.push({ ...product, qty: 1 });
+  const max = Number(product.stock ?? found?.stock ?? Infinity);
+
+  if (max < 1) return showToast(`"${product.name}" esta agotado`);
+  if (found && found.qty + 1 > max) return showToast(`Solo hay ${max} unidad(es) de "${product.name}"`);
+
+  if (found) {
+    found.qty += 1;
+    found.stock = max;
+  } else {
+    list.push({ ...product, qty: 1 });
+  }
   write(list);
   showToast(`"${product.name}" agregado a la cesta`);
 }
 
 export function setQty(id, qty) {
   qty = Math.max(0, parseInt(qty, 10) || 0);
+  const item = read().find((i) => i.id === id);
+  const max = Number(item?.stock ?? Infinity);
+  if (qty > max) {
+    showToast(`Solo hay ${max} unidad(es) de "${item.name}"`);
+    qty = max;
+  }
   const list = qty === 0
     ? read().filter((i) => i.id !== id)
     : read().map((i) => (i.id === id ? { ...i, qty } : i));

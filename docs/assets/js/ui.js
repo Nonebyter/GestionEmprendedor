@@ -88,6 +88,111 @@ export function openImage(src, title = '') {
   bootstrap.Modal.getOrCreateInstance(el).show();
 }
 
+// Reemplazo del confirm() nativo, con los mismos componentes (modal Bootstrap) del proyecto.
+export function confirmDialog(message, { title = 'Confirmar', okText = 'Aceptar', okVariant = 'danger', cancelText = 'Cancelar' } = {}) {
+  return new Promise((resolve) => {
+    let el = document.getElementById('confirm-dialog');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'confirm-dialog';
+      el.className = 'modal fade';
+      el.tabIndex = -1;
+      el.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title"></h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body"></div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"></button>
+              <button type="button" class="btn" id="confirm-dialog-ok"></button>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(el);
+    }
+    el.querySelector('.modal-title').textContent = title;
+    el.querySelector('.modal-body').textContent = message;
+    el.querySelector('.modal-footer .btn-outline-secondary').textContent = cancelText;
+    const okBtn = el.querySelector('#confirm-dialog-ok');
+    okBtn.textContent = okText;
+    okBtn.className = `btn btn-${okVariant}`;
+    const modal = bootstrap.Modal.getOrCreateInstance(el);
+
+    let ok = false;
+    const onOk = () => { ok = true; modal.hide(); };
+    const onHidden = () => {
+      okBtn.removeEventListener('click', onOk);
+      el.removeEventListener('hidden.bs.modal', onHidden);
+      resolve(ok);
+    };
+    okBtn.addEventListener('click', onOk);
+    el.addEventListener('hidden.bs.modal', onHidden);
+    modal.show();
+  });
+}
+
+// Convierte un <select> nativo en un menu desplegable con los componentes del proyecto (Bootstrap).
+export function enhanceSelect(select) {
+  if (!select) return;
+  if (!select.dataset.customSelect) {
+    select.dataset.customSelect = '1';
+    select.removeAttribute('required');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'custom-select';
+    select.parentNode.insertBefore(wrap, select);
+    wrap.appendChild(select);
+    select.classList.add('custom-select-native');
+    select.tabIndex = -1;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `form-select custom-select-btn${select.classList.contains('form-select-sm') ? ' form-select-sm' : ''}`;
+
+    const menu = document.createElement('div');
+    menu.className = 'dropdown-menu custom-select-menu';
+
+    wrap.append(btn, menu);
+
+    btn.addEventListener('click', () => {
+      const willOpen = !menu.classList.contains('show');
+      document.querySelectorAll('.custom-select-menu.show').forEach((m) => m.classList.remove('show'));
+      menu.classList.toggle('show', willOpen);
+    });
+    document.addEventListener('click', (e) => {
+      if (!wrap.contains(e.target)) menu.classList.remove('show');
+    });
+
+    select._customBtn = btn;
+    select._customMenu = menu;
+  }
+  refreshSelect(select);
+}
+
+// Reconstruye el menu del selector personalizado cuando cambian las opciones del <select>.
+export function refreshSelect(select) {
+  if (!select?._customMenu) return;
+  const btn = select._customBtn;
+  const menu = select._customMenu;
+  menu.innerHTML = [...select.options].map((opt, i) => `
+    <button type="button" class="dropdown-item${opt.disabled ? ' disabled' : ''}${opt.selected ? ' active' : ''}" data-idx="${i}">${escapeHtml(opt.textContent)}</button>`).join('');
+  menu.querySelectorAll('.dropdown-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      if (item.classList.contains('disabled')) return;
+      select.selectedIndex = Number(item.dataset.idx);
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      menu.classList.remove('show');
+      refreshSelect(select);
+    });
+  });
+  btn.textContent = select.selectedOptions[0]?.textContent || '';
+  btn.disabled = select.disabled;
+  btn.classList.toggle('disabled', select.disabled);
+}
+
 export function filterList(inputId, containerId, itemSelector = '[data-key]') {
   const input = document.getElementById(inputId);
   const box = document.getElementById(containerId);
@@ -167,6 +272,23 @@ export function renderNavbar({ active = '', admin = false } = {}) {
       </div>
     </div>
   </nav>`;
+
+  // El menu quedaba expandido al navegar entre secciones con anclas (#seccion);
+  // se contrae solo tras elegir una opcion o al tocar fuera de el.
+  const collapseEl = nav.querySelector('.navbar-collapse');
+  if (collapseEl) {
+    const closeMenu = () => {
+      if (collapseEl.classList.contains('show')) {
+        bootstrap.Collapse.getOrCreateInstance(collapseEl).hide();
+      }
+    };
+    collapseEl.querySelectorAll('a.nav-link, .btn').forEach((el) => el.addEventListener('click', closeMenu));
+    document.addEventListener('click', (e) => {
+      if (collapseEl.classList.contains('show') && !collapseEl.contains(e.target) && !e.target.closest('.navbar-toggler')) {
+        closeMenu();
+      }
+    });
+  }
 }
 
 export function registerServiceWorker() {

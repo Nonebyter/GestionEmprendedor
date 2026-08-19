@@ -4,11 +4,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   listProducts, saveProduct, deleteProduct, listPurchases, registerPurchase, deletePurchase,
-  listSales, registerSale, deleteSale, listOrders, updateOrderStatus, markOrderSold, monthlySummary, todayStr
+  listSales, registerSale, deleteSale, listOrders, updateOrderStatus, markOrderSold, deleteOrder, monthlySummary, todayStr
 } from '../store.js';
 import {
   money, escapeHtml, fechaCorta, compressImage, showToast, loading, openImage, normalize, normalizePhone,
-  filterList, renderNavbar, registerServiceWorker, STATUSES, STATUS_LABEL, STATUS_COLOR
+  filterList, renderNavbar, registerServiceWorker, confirmDialog, enhanceSelect, STATUSES, STATUS_LABEL, STATUS_COLOR
 } from '../ui.js';
 
 renderNavbar({ active: '#resumen', admin: true });
@@ -154,8 +154,10 @@ async function cargarProductos() {
       ${escapeHtml(p.name)} (stock ${Number(p.stock) || 0})</option>`).join('');
   $('c-producto').innerHTML = '<option value="">-- Producto nuevo --</option>' + opciones;
   $('v-producto').innerHTML = '<option value="">Selecciona...</option>' + productos.map((p) =>
-    `<option value="${p.id}" data-price="${p.price || 0}" ${Number(p.stock) <= 0 ? 'disabled' : ''}>
+    `<option value="${p.id}" data-price="${p.price || 0}" data-stock="${Number(p.stock) || 0}" ${Number(p.stock) <= 0 ? 'disabled' : ''}>
       ${escapeHtml(p.name)} (stock ${Number(p.stock) || 0})</option>`).join('');
+  enhanceSelect($('c-producto'));
+  enhanceSelect($('v-producto'));
 
   document.querySelectorAll('[data-edit]').forEach((b) =>
     b.addEventListener('click', () => abrirProducto(productos.find((p) => p.id === b.dataset.edit))));
@@ -166,7 +168,7 @@ async function cargarProductos() {
     }));
   document.querySelectorAll('[data-del-prod]').forEach((b) =>
     b.addEventListener('click', async () => {
-      if (!confirm('Eliminar este producto?')) return;
+      if (!(await confirmDialog('Eliminar este producto?'))) return;
       loading(true, 'Eliminando...');
       await deleteProduct(b.dataset.delProd);
       loading(false);
@@ -259,7 +261,7 @@ async function cargarCompras() {
 
   document.querySelectorAll('[data-del-compra]').forEach((b) =>
     b.addEventListener('click', async () => {
-      if (!confirm('Eliminar la compra? Se descontara el stock.')) return;
+      if (!(await confirmDialog('Eliminar la compra? Se descontara el stock.'))) return;
       loading(true, 'Eliminando...');
       await deletePurchase(b.dataset.delCompra);
       loading(false);
@@ -270,7 +272,12 @@ async function cargarCompras() {
 
 // ------------------------------------------------------------------- ventas
 $('v-producto').addEventListener('change', () => {
-  $('v-precio').value = $('v-producto').selectedOptions[0]?.dataset.price || '';
+  const opcion = $('v-producto').selectedOptions[0];
+  $('v-precio').value = opcion?.dataset.price || '';
+  const cantidad = $('form-venta').quantity;
+  const stock = Number(opcion?.dataset.stock) || 0;
+  cantidad.max = stock || '';
+  if (Number(cantidad.value) > stock) cantidad.value = stock || 1;
 });
 
 $('form-venta').addEventListener('submit', async (e) => {
@@ -305,7 +312,7 @@ async function cargarVentas() {
 
   document.querySelectorAll('[data-del-venta]').forEach((b) =>
     b.addEventListener('click', async () => {
-      if (!confirm('Eliminar la venta? Se devolvera el stock.')) return;
+      if (!(await confirmDialog('Eliminar la venta? Se devolvera el stock.'))) return;
       loading(true, 'Eliminando...');
       await deleteSale(b.dataset.delVenta);
       loading(false);
@@ -387,17 +394,36 @@ async function cargarPedidos() {
             : `<button class="btn btn-success w-100 mt-2" data-vendido="${o.id}">
                  <i class="bi bi-cash-coin"></i> Marcar como vendido</button>
                <div class="form-text mt-1">Registra la venta en el resumen y descuenta el stock.</div>`}
+          <button class="btn btn-sm btn-outline-danger w-100 mt-2" data-del-pedido="${o.id}">
+            <i class="bi bi-trash"></i> Eliminar pedido</button>
         </div>
       </div>
     </div>`).join('');
 
+  document.querySelectorAll('[data-status-select]').forEach((sel) => enhanceSelect(sel));
+
   document.querySelectorAll('[data-vendido]').forEach((b) =>
     b.addEventListener('click', async () => {
-      if (!confirm('Marcar el pedido como vendido? Se registrara la venta y se descontara el stock.')) return;
+      if (!(await confirmDialog('Marcar el pedido como vendido? Se registrara la venta y se descontara el stock.', { okVariant: 'success', okText: 'Marcar vendido' }))) return;
       loading(true, 'Registrando venta...');
       try {
         await markOrderSold(b.dataset.vendido);
         showToast('Venta registrada');
+        await cargarTodo();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      } finally {
+        loading(false);
+      }
+    }));
+
+  document.querySelectorAll('[data-del-pedido]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (!(await confirmDialog('Eliminar este pedido? Esta accion no se puede deshacer.'))) return;
+      loading(true, 'Eliminando...');
+      try {
+        await deleteOrder(b.dataset.delPedido);
+        showToast('Pedido eliminado');
         await cargarTodo();
       } catch (err) {
         showToast(err.message, 'danger');

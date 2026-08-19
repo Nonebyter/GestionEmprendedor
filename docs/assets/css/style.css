@@ -124,7 +124,7 @@ hr { border-color: var(--v-line); opacity: .6; }
 /* --------------------------------------------------------------- productos */
 .product-img-wrap { position: relative; aspect-ratio: 1 / 1; overflow: hidden; background: var(--v-surface-2); }
 .product-img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.92) sepia(.08); }
-.product-card { transition: transform .15s ease, box-shadow .15s ease; }
+.product-card { transition: transform .15s ease, box-shadow .15s ease; user-select: none; -webkit-user-select: none; }
 .product-card:hover { transform: translateY(-3px); box-shadow: 0 .6rem 1rem rgba(70, 51, 28, .22) !important; }
 .product-desc {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -137,12 +137,12 @@ hr { border-color: var(--v-line); opacity: .6; }
 .bg-light { background-color: var(--v-surface-2) !important; }
 
 /* -------------------------------------------------------- imagen ampliada */
-.zoomable { cursor: zoom-in; }
+.zoomable { cursor: pointer; }
 .zoom-hint {
-  position: absolute; right: .5rem; bottom: .5rem;
+  position: absolute; right: .5rem; bottom: .5rem; z-index: 2;
   background: rgba(42, 37, 33, .65); color: #f4ecdc;
-  border-radius: .35rem; padding: .1rem .4rem; font-size: .8rem;
-  opacity: 0; transition: opacity .15s ease; pointer-events: none;
+  border-radius: .35rem; padding: .3rem .5rem; font-size: .8rem;
+  opacity: 0; transition: opacity .15s ease; cursor: zoom-in;
 }
 .product-card:hover .zoom-hint { opacity: 1; }
 @media (hover: none) { .zoom-hint { opacity: .85; } }
@@ -151,6 +151,44 @@ hr { border-color: var(--v-line); opacity: .6; }
 .lightbox-img {
   max-width: 100%; max-height: 78vh; object-fit: contain;
   border-radius: .4rem; border: 1px solid var(--v-line);
+}
+
+/* --------------------------------------------------------------- agotado */
+.product-card { cursor: pointer; }
+.product-img-wrap.agotado .product-img { filter: grayscale(.55) saturate(.6) brightness(.82); }
+.agotado-banner {
+  position: absolute; left: -10%; right: -10%; top: 38%;
+  background: rgba(42, 37, 33, .85); color: #fdf7ec;
+  text-align: center; padding: .3rem 0; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; font-size: .8rem; transform: rotate(-8deg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .25); pointer-events: none;
+}
+
+/* ------------------------------------------------------- selector propio */
+.custom-select { position: relative; }
+.custom-select select.custom-select-native { position: absolute; inset: 0; opacity: 0; z-index: -1; pointer-events: none; }
+.custom-select-btn {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  text-align: left; cursor: pointer;
+}
+.custom-select-btn.disabled, .custom-select-btn:disabled { opacity: .65; cursor: not-allowed; }
+.custom-select-menu {
+  position: absolute; top: 100%; left: 0; margin-top: .2rem; width: 100%;
+  max-height: 260px; overflow-y: auto; z-index: 1055;
+}
+.custom-select-menu .dropdown-item.active, .custom-select-menu .dropdown-item:active {
+  background-color: var(--v-primary); color: #fdf7ec;
+}
+.custom-select-menu .dropdown-item.disabled { opacity: .5; pointer-events: none; }
+
+/* ------------------------------------------------------ animaciones icono */
+@media (prefers-reduced-motion: no-preference) {
+  i.bi { display: inline-block; animation: icon-breathe 3.4s ease-in-out infinite; }
+  .navbar-brand i.bi { animation-duration: 4.2s; }
+}
+@keyframes icon-breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.14); opacity: .82; }
 }
 
 .fab-cart {
