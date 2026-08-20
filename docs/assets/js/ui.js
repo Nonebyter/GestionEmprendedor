@@ -206,13 +206,56 @@ export function filterList(inputId, containerId, itemSelector = '[data-key]') {
   });
 }
 
-// Dibuja un source (ImageBitmap o HTMLImageElement) ya orientado en un canvas y devuelve el dataURL comprimido.
-function drawToCompressedDataUrl(source, w, h, maxSize, quality) {
-  const scale = Math.min(1, maxSize / Math.max(w, h));
+// Lee la etiqueta EXIF de orientacion (1-8) de un JPEG; 1 si no aplica o no se pudo leer.
+function getExifOrientation(buffer) {
+  try {
+    const view = new DataView(buffer);
+    if (view.byteLength < 4 || view.getUint16(0) !== 0xFFD8) return 1;
+    let offset = 2;
+    while (offset < view.byteLength) {
+      const marker = view.getUint16(offset);
+      offset += 2;
+      if (marker === 0xFFE1) {
+        if (view.getUint32(offset + 2) !== 0x45786966) return 1; // "Exif"
+        const little = view.getUint16(offset + 8) === 0x4949;
+        const tiffOffset = offset + 8;
+        const dirOffset = tiffOffset + view.getUint32(tiffOffset + 4, little);
+        const tags = view.getUint16(dirOffset, little);
+        for (let i = 0; i < tags; i++) {
+          const entryOffset = dirOffset + 2 + i * 12;
+          if (view.getUint16(entryOffset, little) === 0x0112) return view.getUint16(entryOffset + 8, little);
+        }
+        return 1;
+      }
+      if ((marker & 0xFF00) !== 0xFF00) break;
+      offset += view.getUint16(offset);
+    }
+  } catch {
+    // ignora archivos sin EXIF valido
+  }
+  return 1;
+}
+
+// Dibuja un source (ImageBitmap o HTMLImageElement) aplicando la orientacion EXIF y devuelve el dataURL comprimido.
+function drawToCompressedDataUrl(source, w, h, maxSize, quality, orientation = 1) {
+  const swapped = orientation >= 5 && orientation <= 8;
+  const scale = Math.min(1, maxSize / Math.max(swapped ? h : w, swapped ? w : h));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(w * scale);
-  canvas.height = Math.round(h * scale);
-  canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+  canvas.width = Math.round((swapped ? h : w) * scale);
+  canvas.height = Math.round((swapped ? w : h) * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  switch (orientation) {
+    case 2: ctx.transform(-1, 0, 0, 1, w, 0); break;
+    case 3: ctx.transform(-1, 0, 0, -1, w, h); break;
+    case 4: ctx.transform(1, 0, 0, -1, 0, h); break;
+    case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+    case 6: ctx.transform(0, 1, -1, 0, h, 0); break;
+    case 7: ctx.transform(0, -1, -1, 0, h, w); break;
+    case 8: ctx.transform(0, -1, 1, 0, 0, w); break;
+    default: break;
+  }
+  ctx.drawImage(source, 0, 0, w, h);
   let out = canvas.toDataURL('image/jpeg', quality);
   let q = quality;
   while (out.length > 700000 && q > 0.3) {
@@ -223,9 +266,11 @@ function drawToCompressedDataUrl(source, w, h, maxSize, quality) {
 }
 
 // Reduce y comprime la imagen en el navegador para guardarla en Firestore.
-// Usa createImageBitmap directo sobre el archivo (soporta blobs grandes de Google Fotos u otros
-// selectores basados en content:// / picker) y corrige automaticamente la orientacion EXIF,
-// para que la foto no aparezca rotada en ningun dispositivo.
+// Usa createImageBitmap directo sobre el archivo (soporta blobs grandes de selectores tipo
+// Google Fotos) y corrige la orientacion EXIF para que la foto no quede rotada en ningun dispositivo.
+// Si createImageBitmap no esta disponible o falla, usa un ObjectURL (mas tolerante que un dataURL
+// con archivos sin tipo MIME correcto, como los que a veces entrega el picker de Google Fotos)
+// aplicando manualmente la rotacion EXIF leida del propio archivo.
 export async function compressImage(file, maxSize = 700, quality = 0.72) {
   if (!file) return '';
   if (typeof createImageBitmap === 'function') {
@@ -238,17 +283,23 @@ export async function compressImage(file, maxSize = 700, quality = 0.72) {
       // Sigue con el metodo alternativo si el navegador no puede decodificar asi.
     }
   }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
-    reader.onload = () => {
+  let orientation = 1;
+  try {
+    orientation = getExifOrientation(await file.arrayBuffer());
+  } catch {
+    orientation = 1;
+  }
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    return await new Promise((resolve, reject) => {
       const img = new Image();
       img.onerror = () => reject(new Error('Archivo de imagen invalido.'));
-      img.onload = () => resolve(drawToCompressedDataUrl(img, img.width, img.height, maxSize, quality));
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
+      img.onload = () => resolve(drawToCompressedDataUrl(img, img.naturalWidth, img.naturalHeight, maxSize, quality, orientation));
+      img.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 export function renderNavbar({ active = '', admin = false } = {}) {
