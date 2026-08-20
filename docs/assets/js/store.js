@@ -16,6 +16,14 @@ export const todayStr = () => localDay();
 const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 const int = (v) => Math.trunc(num(v));
 const newCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+export const categoryKey = (value) => normalize(value || 'General');
+export const normalizeCategory = (value) => {
+  const category = String(value ?? '').normalize('NFC').trim()
+    .replace(/\s+/g, ' ').toLocaleLowerCase('es-ES');
+  return category
+    ? category.charAt(0).toLocaleUpperCase('es-ES') + category.slice(1)
+    : 'General';
+};
 
 async function all(name) {
   const snap = await getDocs(collection(db, name));
@@ -25,6 +33,11 @@ async function all(name) {
 // ------------------------------------------------------------------ productos
 export async function listProducts({ onlyActive = false } = {}) {
   let items = await all(COL.products);
+  items = items.map((product) => ({
+    ...product,
+    category: normalizeCategory(product.category),
+    category_key: product.category_key || categoryKey(product.category)
+  }));
   if (onlyActive) items = items.filter((p) => p.active !== false);
   return items.sort((a, b) => normalize(a.name).localeCompare(normalize(b.name)));
 }
@@ -38,7 +51,8 @@ export async function saveProduct(data, id = null) {
   const payload = {
     name: (data.name || '').trim(),
     name_key: normalize(data.name),
-    category: (data.category || '').trim() || 'General',
+    category: normalizeCategory(data.category),
+    category_key: categoryKey(data.category),
     description: (data.description || '').trim(),
     price: num(data.price),
     cost: num(data.cost),
@@ -69,7 +83,7 @@ async function adjustStock(productId, delta) {
 
 export async function categories() {
   const items = await listProducts();
-  return [...new Set(items.map((p) => p.category || 'General'))].sort();
+  return [...new Set(items.map((p) => p.category))].sort();
 }
 
 // -------------------------------------------------------------------- compras
@@ -108,7 +122,8 @@ export async function registerPurchase(data) {
     if (product) productId = product.id;
   }
 
-  const category = (data.category || product?.category || 'General').trim();
+  const category = normalizeCategory(data.category || product?.category);
+  const category_key = categoryKey(category);
   const description = (data.description || product?.description || '').trim();
   const image_url = data.image_url || product?.image_url || '';
 
@@ -117,7 +132,7 @@ export async function registerPurchase(data) {
       stock: Math.max(0, int(product.stock) + quantity),
       price: salePrice > 0 ? salePrice : num(product.price),
       cost: unitCost > 0 ? unitCost : num(product.cost),
-      category, description, image_url,
+      category, category_key, description, image_url,
       updated_at: nowIso()
     });
   } else {
@@ -127,7 +142,7 @@ export async function registerPurchase(data) {
   await addDoc(collection(db, COL.purchases), {
     product_id: productId,
     product_name: product?.name || data.name || '',
-    category,
+    category, category_key,
     quantity,
     unit_cost: unitCost,
     total: Number((unitCost * quantity).toFixed(2)),

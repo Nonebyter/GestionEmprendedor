@@ -56,7 +56,8 @@ let productos = [],
   chart = null,
   filtroPedidos = "",
   busquedaPedidos = "",
-  unsubPurchases = null;
+  unsubPurchases = null,
+  comprasActuales = [];
 
 // ------------------------------------------------------------------ sesion
 document
@@ -181,11 +182,11 @@ async function cargarResumen() {
     data: {
       labels: s.labels,
       datasets: [
-        { label: "Ventas", data: s.salesSeries, backgroundColor: "#8c4a2f" },
+        { label: "Ventas", data: s.salesSeries, backgroundColor: "#c42d67" },
         {
           label: "Compras",
           data: s.purchaseSeries,
-          backgroundColor: "#a8894f",
+          backgroundColor: "#d77c72",
         },
       ],
     },
@@ -194,12 +195,12 @@ async function cargarResumen() {
       scales: {
         y: {
           beginAtZero: true,
-          grid: { color: "rgba(120,96,62,.15)" },
-          ticks: { color: "#7b6d5d" },
+          grid: { color: "rgba(196,45,103,.15)" },
+          ticks: { color: "#795667" },
         },
-        x: { grid: { display: false }, ticks: { color: "#7b6d5d" } },
+        x: { grid: { display: false }, ticks: { color: "#795667" } },
       },
-      plugins: { legend: { labels: { color: "#2f2925" } } },
+      plugins: { legend: { labels: { color: "#35242d" } } },
     },
   });
 }
@@ -356,19 +357,18 @@ $("form-compra").addEventListener("submit", async (e) => {
   }
 });
 
-// Render de la tabla de compras; se llama en tiempo real via subscribePurchases (ver login),
-// asi que siempre refleja las compras registradas desde cualquier dispositivo.
-// 1. La función de renderizado se vuelve pura (solo muta el DOM)
 function renderCompras(compras) {
   const tbody = $("tb-compras");
+  comprasActuales = compras || [];
 
-  if (!compras || !compras.length) {
+  if (!comprasActuales.length) {
     tbody.innerHTML =
       '<tr><td colspan="5" class="text-center text-muted py-4">Sin compras registradas.</td></tr>';
+    actualizarFiltroCompras();
     return;
   }
 
-  tbody.innerHTML = compras
+  tbody.innerHTML = comprasActuales
     .map(
       (c) => `
     <tr data-key="${escapeHtml(`${c.product_name} ${c.supplier || ""} ${c.date}`)}">
@@ -387,13 +387,30 @@ function renderCompras(compras) {
     </tr>`,
     )
     .join("");
+  actualizarFiltroCompras();
 }
 
-// 2. Se adjunta el evento UNA SOLA VEZ fuera de la función (ej. en el inicializador de su vista)
+function actualizarFiltroCompras() {
+  const terminos = normalize($("f-compras").value).split(/\s+/).filter(Boolean);
+  const filas = [...$("tb-compras").querySelectorAll("tr[data-key]")];
+  let visibles = 0;
+
+  filas.forEach((fila) => {
+    const coincide = terminos.every((termino) =>
+      normalize(fila.dataset.key).includes(termino),
+    );
+    fila.classList.toggle("d-none", !coincide);
+    if (coincide) visibles++;
+  });
+
+  $("compras-contador").textContent = comprasActuales.length
+    ? `Mostrando ${visibles} de ${comprasActuales.length} compras`
+    : "";
+}
+
 $("tb-compras").addEventListener("click", async (e) => {
-  // Verificamos si el clic provino de un botón de eliminar o de un icono dentro de él
   const btn = e.target.closest("[data-del-compra]");
-  if (!btn) return; // Si no es el botón, ignoramos el clic
+  if (!btn) return;
 
   const idCompra = btn.dataset.delCompra;
 
@@ -404,13 +421,33 @@ $("tb-compras").addEventListener("click", async (e) => {
   try {
     await deletePurchase(idCompra);
     showToast("Compra eliminada");
-    cargarTodo(); // Opcional: si implementa WebSockets, esta llamada podría ser redundante.
+    cargarTodo();
   } catch (error) {
     showToast("Error al eliminar la compra", "error");
   } finally {
     loading(false);
   }
 });
+
+function abrirAvisoDePedido(order, status, whatsappWindow = null) {
+  const estado = STATUS_LABEL[status] || status;
+  const mensaje = `Hola ${order.customer_name}, tu pedido #${order.code} ahora esta: ${estado}.`;
+  const telefono = order.phone_key || normalizePhone(order.phone);
+
+  if (telefono) {
+    const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
+    if (whatsappWindow) whatsappWindow.location.href = whatsappUrl;
+    else window.open(whatsappUrl, "_blank", "noopener");
+  } else {
+    whatsappWindow?.close();
+  }
+
+  if (order.email) {
+    const asunto = `Estado de tu pedido #${order.code}`;
+    const copia = BUSINESS.email ? `&cc=${encodeURIComponent(BUSINESS.email)}` : "";
+    window.location.href = `mailto:${encodeURIComponent(order.email)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(mensaje)}${copia}`;
+  }
+}
 
 // ------------------------------------------------------------------- ventas
 $("v-producto").addEventListener("change", () => {
@@ -628,12 +665,19 @@ async function cargarPedidos() {
       const status = document.querySelector(
         `[data-status-select="${id}"]`,
       ).value;
+      const pedido = pedidos.find((o) => o.id === id);
+      const avisarVisto = status === "visto" && pedido?.status !== "visto";
+      const whatsappWindow = avisarVisto && (pedido?.phone_key || normalizePhone(pedido?.phone))
+        ? window.open("", "_blank")
+        : null;
       loading(true, "Actualizando pedido...");
       try {
         await updateOrderStatus(id, status);
+        if (avisarVisto) abrirAvisoDePedido(pedido, status, whatsappWindow);
         showToast("Pedido actualizado");
         await cargarTodo();
       } catch (err) {
+        whatsappWindow?.close();
         showToast(err.message, "danger");
       } finally {
         loading(false);
@@ -660,8 +704,8 @@ $("btn-refresh").addEventListener("click", cargarTodo);
 $("c-fecha").value = todayStr();
 $("v-fecha").value = todayStr();
 filterList("f-productos", "tb-productos", "tr[data-key]");
-filterList("f-compras", "tb-compras", "tr[data-key]");
 filterList("f-ventas", "tb-ventas", "tr[data-key]");
+$("f-compras").addEventListener("input", actualizarFiltroCompras);
 
 let debouncePedidos;
 $("f-pedidos").addEventListener("input", (e) => {

@@ -31,6 +31,7 @@ En `docs/assets/js/firebase.js`:
 export const BUSINESS = {
   name: "Mi Emprendimiento",
   phone: "",        // ej: 50588887777 para el boton de WhatsApp
+  email: "",        // correo usado para los avisos de estado de pedidos
   currency: "$"
 };
 ```
@@ -39,10 +40,15 @@ export const BUSINESS = {
 
 - **Compras**: al registrar una compra se crea o actualiza el producto (nombre, categoria,
   precio, descripcion, foto) y se **suma** el stock. Esa foto es la que aparece en el catalogo.
+  Las categorias se guardan con formato uniforme; por ejemplo, `perfume para dama` y
+  `Perfume Para Dama` se convierten en `Perfume para dama`.
 - **Catalogo** (publico): buscador, filtro por categoria, boton *Ordenar* y cesta en el navegador.
 - **Pedido**: el cliente deja nombre, telefono y direccion. Sin pago en linea.
 - **Estados**: nuevo -> visto -> confirmado -> entregado / cancelado.
   Al marcar **confirmado** se registra la venta y se **descuenta** el stock (solo una vez).
+  Al cambiar por primera vez a **Visto**, se abre WhatsApp y, si el cliente indico correo,
+  el cliente de correo con el aviso listo para enviar. Configura el correo del negocio en
+  `BUSINESS.email` para recibir una copia del correo.
 - **Mis pedidos**: consulta publica con nombre + telefono, sin login.
 - **Resumen semanal**: ventas, compras, ganancia, valor del inventario, mas vendidos y stock bajo.
 

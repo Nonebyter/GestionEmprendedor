@@ -20,5 +20,6 @@ export const auth = getAuth(app);
 export const BUSINESS = {
   name: "Mi Emprendimiento",
   phone: "",        // formato internacional sin +, ej: 50588887777 (para WhatsApp)
+  email: "",        // correo que abre el cliente de correo al avisar estados de pedidos
   currency: "€"  // simbolo de la moneda, ej: "$", "₡", "₽", "€"
 };
