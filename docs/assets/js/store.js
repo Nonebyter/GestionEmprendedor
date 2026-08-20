@@ -78,46 +78,46 @@ export async function listPurchases() {
   return items.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 }
 
+// Nota: se evitan idas y vueltas extra a Firestore (cada await es un round-trip de red que en
+// tablets/wifi lentos se nota mucho); se hace una sola lectura de producto y una sola escritura
+// combinada (metadatos + stock) en vez de leer/escribir el producto varias veces por separado.
 export async function registerPurchase(data) {
   const quantity = Math.max(1, int(data.quantity) || 1);
   const unitCost = num(data.unit_cost);
   const salePrice = num(data.price);
   let productId = (data.product_id || '').trim();
+  let product = null;
 
   if (productId) {
-    const update = { updated_at: nowIso() };
-    if (salePrice > 0) update.price = salePrice;
-    if (unitCost > 0) update.cost = unitCost;
-    if (data.image_url) update.image_url = data.image_url;
-    if (data.category) update.category = data.category.trim();
-    if (data.description) update.description = data.description.trim();
-    await updateDoc(doc(db, COL.products, productId), update);
+    product = await getProduct(productId);
+    if (!product) throw new Error('El producto seleccionado ya no existe.');
   } else {
     if (!(data.name || '').trim()) throw new Error('Escribe el nombre del producto.');
     const key = normalize(data.name);
-    const existing = (await listProducts()).find((p) => (p.name_key || normalize(p.name)) === key);
-    if (existing) {
-      productId = existing.id;
-      await updateDoc(doc(db, COL.products, productId), {
-        price: salePrice || num(existing.price),
-        cost: unitCost || num(existing.cost),
-        category: (data.category || existing.category || 'General').trim(),
-        description: (data.description || existing.description || '').trim(),
-        image_url: data.image_url || existing.image_url || '',
-        updated_at: nowIso()
-      });
-    } else {
-      productId = await saveProduct({ ...data, stock: 0, cost: unitCost, price: salePrice });
-    }
+    product = (await listProducts()).find((p) => (p.name_key || normalize(p.name)) === key) || null;
+    if (product) productId = product.id;
   }
 
-  await adjustStock(productId, quantity);
-  const product = await getProduct(productId);
+  const category = (data.category || product?.category || 'General').trim();
+  const description = (data.description || product?.description || '').trim();
+  const image_url = data.image_url || product?.image_url || '';
+
+  if (productId) {
+    await updateDoc(doc(db, COL.products, productId), {
+      stock: Math.max(0, int(product.stock) + quantity),
+      price: salePrice > 0 ? salePrice : num(product.price),
+      cost: unitCost > 0 ? unitCost : num(product.cost),
+      category, description, image_url,
+      updated_at: nowIso()
+    });
+  } else {
+    productId = await saveProduct({ ...data, category, description, image_url, stock: quantity, cost: unitCost, price: salePrice });
+  }
 
   await addDoc(collection(db, COL.purchases), {
     product_id: productId,
     product_name: product?.name || data.name || '',
-    category: product?.category || 'General',
+    category,
     quantity,
     unit_cost: unitCost,
     total: Number((unitCost * quantity).toFixed(2)),

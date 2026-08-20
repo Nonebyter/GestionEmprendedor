@@ -406,7 +406,22 @@ export function renderNavbar({ active = '', admin = false } = {}) {
 }
 
 export function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-  }
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      // Revisa si hay una version nueva al abrir/volver a la app (util en PWA instalada).
+      reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch(() => {});
+    // Cuando el nuevo service worker toma el control, recarga para usar la version fresca
+    // (evita quedarse con un dispositivo/instalacion viendo datos o codigo desactualizado).
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
+  });
 }

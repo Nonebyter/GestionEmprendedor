@@ -1,5 +1,5 @@
 /* Service worker: cachea la app para que abra rapido y funcione offline parcialmente. */
-const CACHE = 'gestion-static-v2';
+const CACHE = 'gestion-static-v3';
 const ASSETS = [
   './', './index.html', './carrito.html', './pedido.html', './mis-pedidos.html', './admin.html',
   './assets/css/style.css',
@@ -32,7 +32,8 @@ self.addEventListener('fetch', (event) => {
   if (/googleapis\.com|firebaseio|firestore/.test(request.url)) return;
 
   event.respondWith(
-    fetch(request)
+    // no-store evita que el navegador sirva una copia HTTP vieja de otro dispositivo/instalacion.
+    fetch(request, { cache: 'no-store' })
       .then((res) => {
         if (res.ok && new URL(request.url).origin === self.location.origin) {
           const copy = res.clone();
