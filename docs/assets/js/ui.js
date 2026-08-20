@@ -206,29 +206,45 @@ export function filterList(inputId, containerId, itemSelector = '[data-key]') {
   });
 }
 
+// Dibuja un source (ImageBitmap o HTMLImageElement) ya orientado en un canvas y devuelve el dataURL comprimido.
+function drawToCompressedDataUrl(source, w, h, maxSize, quality) {
+  const scale = Math.min(1, maxSize / Math.max(w, h));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+  let out = canvas.toDataURL('image/jpeg', quality);
+  let q = quality;
+  while (out.length > 700000 && q > 0.3) {
+    q -= 0.12;
+    out = canvas.toDataURL('image/jpeg', q);
+  }
+  return out;
+}
+
 // Reduce y comprime la imagen en el navegador para guardarla en Firestore.
-export function compressImage(file, maxSize = 700, quality = 0.72) {
+// Usa createImageBitmap directo sobre el archivo (soporta blobs grandes de Google Fotos u otros
+// selectores basados en content:// / picker) y corrige automaticamente la orientacion EXIF,
+// para que la foto no aparezca rotada en ningun dispositivo.
+export async function compressImage(file, maxSize = 700, quality = 0.72) {
+  if (!file) return '';
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      const out = drawToCompressedDataUrl(bitmap, bitmap.width, bitmap.height, maxSize, quality);
+      bitmap.close?.();
+      return out;
+    } catch {
+      // Sigue con el metodo alternativo si el navegador no puede decodificar asi.
+    }
+  }
   return new Promise((resolve, reject) => {
-    if (!file) return resolve('');
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
     reader.onload = () => {
       const img = new Image();
       img.onerror = () => reject(new Error('Archivo de imagen invalido.'));
-      img.onload = () => {
-        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        let out = canvas.toDataURL('image/jpeg', quality);
-        let q = quality;
-        while (out.length > 700000 && q > 0.3) {
-          q -= 0.12;
-          out = canvas.toDataURL('image/jpeg', q);
-        }
-        resolve(out);
-      };
+      img.onload = () => resolve(drawToCompressedDataUrl(img, img.width, img.height, maxSize, quality));
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
