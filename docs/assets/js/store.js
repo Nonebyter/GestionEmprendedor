@@ -94,12 +94,16 @@ export async function listPurchases() {
 
 // Escucha cambios en tiempo real: asi se ven las compras registradas desde cualquier
 // dispositivo sin depender de que este dispositivo haga su propia lectura/refresco.
-export function subscribePurchases(cb) {
-  return onSnapshot(collection(db, COL.purchases), (snap) => {
-    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-    cb(items);
-  });
+export function subscribePurchases(cb, onError = console.error) {
+  return onSnapshot(
+    collection(db, COL.purchases),
+    (snap) => {
+      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+      cb(items);
+    },
+    onError,
+  );
 }
 
 // Nota: se evitan idas y vueltas extra a Firestore (cada await es un round-trip de red que en
@@ -139,7 +143,7 @@ export async function registerPurchase(data) {
     productId = await saveProduct({ ...data, category, description, image_url, stock: quantity, cost: unitCost, price: salePrice });
   }
 
-  await addDoc(collection(db, COL.purchases), {
+  const purchase = {
     product_id: productId,
     product_name: product?.name || data.name || '',
     category, category_key,
@@ -150,7 +154,9 @@ export async function registerPurchase(data) {
     note: (data.note || '').trim(),
     date: data.date || todayStr(),
     created_at: nowIso()
-  });
+  };
+  const ref = await addDoc(collection(db, COL.purchases), purchase);
+  return { id: ref.id, ...purchase };
 }
 
 export async function deletePurchase(id) {

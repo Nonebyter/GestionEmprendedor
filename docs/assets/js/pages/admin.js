@@ -10,6 +10,7 @@ import {
   listProducts,
   saveProduct,
   deleteProduct,
+  listPurchases,
   subscribePurchases,
   registerPurchase,
   deletePurchase,
@@ -97,7 +98,10 @@ onAuthStateChanged(auth, (user) => {
   }
   if (user) {
     cargarTodo();
-    unsubPurchases = subscribePurchases(renderCompras);
+    unsubPurchases = subscribePurchases(
+      renderCompras,
+      (err) => showToast(`No se pudieron cargar las compras: ${err.message}`, "danger"),
+    );
   }
 });
 
@@ -345,6 +349,7 @@ $("form-compra").addEventListener("submit", async (e) => {
   try {
     data.image_url = await compressImage(form.image.files[0]);
     await registerPurchase(data);
+    renderCompras(await listPurchases());
     form.reset();
     $("c-fecha").value = todayStr();
     $("c-producto").dispatchEvent(new Event("change"));

@@ -18,8 +18,8 @@ export const auth = getAuth(app);
 
 // Personaliza aqui los datos del negocio.
 export const BUSINESS = {
-  name: "Mi Emprendimiento",
-  phone: "",        // formato internacional sin +, ej: 50588887777 (para WhatsApp)
-  email: "",        // correo que abre el cliente de correo al avisar estados de pedidos
+  name: "Yamy Beauty",  // nombre del negocio
+  phone: "34624747308",        // formato internacional sin +, ej: 50588887777 (para WhatsApp)
+  email: "rubiarios57@gmail.com",        // correo que abre el cliente de correo al avisar estados de pedidos
   currency: "€"  // simbolo de la moneda, ej: "$", "₡", "₽", "€"
 };
