@@ -3,7 +3,7 @@ import {
   signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
-  listProducts, saveProduct, deleteProduct, listPurchases, registerPurchase, deletePurchase,
+  listProducts, saveProduct, deleteProduct, subscribePurchases, registerPurchase, deletePurchase,
   listSales, registerSale, deleteSale, listOrders, updateOrderStatus, markOrderSold, deleteOrder, monthlySummary, todayStr
 } from '../store.js';
 import {
@@ -19,7 +19,7 @@ const $ = (id) => document.getElementById(id);
 const SECTIONS = ['resumen', 'inventario', 'compras', 'ventas', 'pedidos'];
 // Pedidos que siguen requiriendo atencion; los vendidos salen de la vista por defecto.
 const PEDIDOS_ACTIVOS = ['nuevo', 'visto', 'confirmado'];
-let productos = [], chart = null, filtroPedidos = '', busquedaPedidos = '';
+let productos = [], chart = null, filtroPedidos = '', busquedaPedidos = '', unsubPurchases = null;
 
 // ------------------------------------------------------------------ sesion
 document.getElementById('btn-logout')?.addEventListener('click', () => signOut(auth));
@@ -42,7 +42,11 @@ onAuthStateChanged(auth, (user) => {
   $('login-view').classList.toggle('d-none', !!user);
   $('admin-view').classList.toggle('d-none', !user);
   document.querySelector('#navbar .navbar-collapse').classList.toggle('invisible', !user);
-  if (user) cargarTodo();
+  if (unsubPurchases) { unsubPurchases(); unsubPurchases = null; }
+  if (user) {
+    cargarTodo();
+    unsubPurchases = subscribePurchases(renderCompras);
+  }
 });
 
 // --------------------------------------------------------------- navegacion
@@ -246,8 +250,9 @@ $('form-compra').addEventListener('submit', async (e) => {
   }
 });
 
-async function cargarCompras() {
-  const compras = await listPurchases();
+// Render de la tabla de compras; se llama en tiempo real via subscribePurchases (ver login),
+// asi que siempre refleja las compras registradas desde cualquier dispositivo.
+function renderCompras(compras) {
   $('tb-compras').innerHTML = compras.length ? compras.map((c) => `
     <tr data-key="${escapeHtml(`${c.product_name} ${c.supplier || ''} ${c.date}`)}">
       <td class="small text-muted">${escapeHtml(c.date)}</td>
@@ -454,7 +459,8 @@ async function cargarTodo() {
   loading(true, 'Cargando datos...');
   try {
     await cargarProductos();
-    await Promise.all([cargarResumen(), cargarCompras(), cargarVentas(), cargarPedidos()]);
+    // Compras se mantiene aparte via subscribePurchases (tiempo real, ver onAuthStateChanged).
+    await Promise.all([cargarResumen(), cargarVentas(), cargarPedidos()]);
   } catch (err) {
     showToast('Error al cargar datos: ' + err.message, 'danger');
   } finally {

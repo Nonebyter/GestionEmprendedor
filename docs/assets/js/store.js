@@ -2,7 +2,7 @@
 import { db } from './firebase.js';
 import { normalize, normalizePhone } from './ui.js';
 import {
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const COL = { products: 'products', purchases: 'purchases', sales: 'sales', orders: 'orders' };
@@ -76,6 +76,16 @@ export async function categories() {
 export async function listPurchases() {
   const items = await all(COL.purchases);
   return items.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+}
+
+// Escucha cambios en tiempo real: asi se ven las compras registradas desde cualquier
+// dispositivo sin depender de que este dispositivo haga su propia lectura/refresco.
+export function subscribePurchases(cb) {
+  return onSnapshot(collection(db, COL.purchases), (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    cb(items);
+  });
 }
 
 // Nota: se evitan idas y vueltas extra a Firestore (cada await es un round-trip de red que en
