@@ -1,11 +1,12 @@
 /* Service worker: cachea la app para que abra rapido y funcione offline parcialmente. */
-const CACHE = 'gestion-static-v3';
+const CACHE = 'gestion-static-v4';
 const ASSETS = [
   './', './index.html', './carrito.html', './pedido.html', './mis-pedidos.html', './admin.html',
   './assets/css/style.css',
   './assets/js/firebase.js', './assets/js/ui.js', './assets/js/store.js', './assets/js/cart.js',
   './assets/js/pages/catalog.js', './assets/js/pages/cart-page.js', './assets/js/pages/order.js',
   './assets/js/pages/track.js', './assets/js/pages/admin.js',
+  './assets/icons/logo.jpeg', './assets/icons/brand-mark.png',
   './assets/icons/icon-192.png', './assets/icons/icon-512.png'
 ];
 

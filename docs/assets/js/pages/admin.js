@@ -381,6 +381,7 @@ function renderCompras(compras) {
       <td>
         <div class="fw-semibold">${escapeHtml(c.product_name)}</div>
         ${c.supplier ? `<div class="small text-muted">${escapeHtml(c.supplier)}</div>` : ""}
+        ${c.note ? `<div class="small text-muted">${escapeHtml(c.note)}</div>` : ""}
       </td>
       <td class="text-center">${Number(c.quantity) || 0}</td>
       <td class="text-end fw-semibold">${money(c.total)}</td>

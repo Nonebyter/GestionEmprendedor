@@ -279,12 +279,12 @@ export async function compressImage(file, maxSize = 700, quality = 0.72) {
   try {
     return await decodeAndCompress(file, maxSize, quality);
   } catch (err) {
-    if (looksLikeHeic(file)) {
+    if (await looksLikeHeic(file)) {
       let jpegBlob;
       try {
         jpegBlob = await convertHeicToJpeg(file);
-      } catch {
-        throw new Error('Esta foto es HEIC/HEIF y no se pudo convertir. Prueba exportarla como JPEG.');
+      } catch (conversionError) {
+        throw new Error('No se pudo convertir esta foto HEIC/HEIF. Abrela en Fotos y usa Compartir o Guardar como JPEG, despues intentalo otra vez.');
       }
       return decodeAndCompress(jpegBlob, maxSize, quality);
     }
@@ -323,14 +323,28 @@ async function decodeAndCompress(file, maxSize, quality) {
   }
 }
 
-function looksLikeHeic(file) {
+async function looksLikeHeic(file) {
   const type = (file.type || '').toLowerCase();
   if (type.includes('heic') || type.includes('heif')) return true;
   const name = (file.name || '').toLowerCase();
-  return name.endsWith('.heic') || name.endsWith('.heif');
+  if (name.endsWith('.heic') || name.endsWith('.heif')) return true;
+
+  // Algunos selectores moviles entregan un nombre y MIME genericos; HEIC identifica
+  // su contenedor ISO-BMFF con una caja ftyp y una marca de HEIF/HEIC.
+  try {
+    const bytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+    const ascii = String.fromCharCode(...bytes);
+    return ascii.slice(4, 8) === 'ftyp' && /(heic|heix|hevc|heim|heis|mif1|msf1)/.test(ascii);
+  } catch {
+    return false;
+  }
 }
 
-const HEIC2ANY_CDN = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+const HEIC2ANY_CDNS = [
+  'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js',
+  'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js',
+];
+let heicConverterPromise;
 
 function loadScriptOnce(src) {
   if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
@@ -344,9 +358,32 @@ function loadScriptOnce(src) {
 }
 
 async function convertHeicToJpeg(file) {
-  if (typeof window.heic2any !== 'function') await loadScriptOnce(HEIC2ANY_CDN);
-  const result = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
-  return Array.isArray(result) ? result[0] : result;
+  if (typeof window.heic2any !== 'function') {
+    heicConverterPromise ||= (async () => {
+      let lastError;
+      for (const cdn of HEIC2ANY_CDNS) {
+        try {
+          await loadScriptOnce(cdn);
+          if (typeof window.heic2any === 'function') return;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      throw lastError || new Error('No se pudo cargar el conversor HEIC.');
+    })();
+    await heicConverterPromise;
+  }
+
+  // heic2any necesita un MIME concreto; los pickers de Android/Google Fotos a
+  // menudo entregan File.type vacio o "application/octet-stream".
+  const heicBlob = new Blob([await file.arrayBuffer()], { type: 'image/heic' });
+  try {
+    const result = await window.heic2any({ blob: heicBlob, toType: 'image/jpeg', quality: 0.85 });
+    return Array.isArray(result) ? result[0] : result;
+  } catch {
+    const result = await window.heic2any({ blob: heicBlob, toType: 'image/png' });
+    return Array.isArray(result) ? result[0] : result;
+  }
 }
 
 export function renderNavbar({ active = '', admin = false } = {}) {
@@ -361,7 +398,9 @@ export function renderNavbar({ active = '', admin = false } = {}) {
   nav.innerHTML = `
   <nav class="navbar navbar-expand-lg navbar-dark sticky-top shadow-sm">
     <div class="container">
-      <a class="navbar-brand fw-bold" href="./index.html"><i class="bi bi-shop"></i> ${escapeHtml(BUSINESS.name)}</a>
+      <a class="navbar-brand fw-bold" href="./index.html">
+        <img class="brand-mark" src="./assets/icons/brand-mark.png" alt="">${escapeHtml(BUSINESS.name)}
+      </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu"><span class="navbar-toggler-icon"></span></button>
       <div class="collapse navbar-collapse" id="navMenu">
         <ul class="navbar-nav me-auto">

@@ -2,7 +2,7 @@
 import { db } from './firebase.js';
 import { normalize, normalizePhone } from './ui.js';
 import {
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const COL = { products: 'products', purchases: 'purchases', sales: 'sales', orders: 'orders' };
@@ -157,6 +157,56 @@ export async function registerPurchase(data) {
   };
   const ref = await addDoc(collection(db, COL.purchases), purchase);
   return { id: ref.id, ...purchase };
+}
+
+// Crea comprobantes iniciales para productos que existian antes de usar Compras.
+// No modifica el inventario porque su stock ya representa esas unidades.
+export async function importInitialPurchases() {
+  const [products, purchases] = await Promise.all([listProducts(), listPurchases()]);
+  const initialPurchases = new Map();
+  for (const purchase of purchases) {
+    if (purchase.source !== 'inventory_initial' || !purchase.product_id) continue;
+    const group = initialPurchases.get(purchase.product_id) || [];
+    group.push(purchase);
+    initialPurchases.set(purchase.product_id, group);
+  }
+
+  let removedDuplicates = 0;
+  for (const duplicates of initialPurchases.values()) {
+    duplicates.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+    for (const duplicate of duplicates.slice(1)) {
+      await deleteDoc(doc(db, COL.purchases, duplicate.id));
+      removedDuplicates++;
+    }
+  }
+
+  const purchasedProductIds = new Set(
+    purchases.map((purchase) => purchase.product_id).filter(Boolean),
+  );
+  const pendingProducts = products.filter(
+    (product) => !purchasedProductIds.has(product.id) && int(product.stock) > 0,
+  );
+
+  for (const product of pendingProducts) {
+    const quantity = int(product.stock);
+    const unitCost = num(product.cost);
+    const category = normalizeCategory(product.category);
+    await setDoc(doc(db, COL.purchases, `inventory-initial-${product.id}`), {
+      product_id: product.id,
+      product_name: product.name || '',
+      category,
+      category_key: categoryKey(category),
+      quantity,
+      unit_cost: unitCost,
+      total: Number((unitCost * quantity).toFixed(2)),
+      supplier: '',
+      note: 'Inventario inicial',
+      date: String(product.created_at || todayStr()).slice(0, 10),
+      created_at: nowIso(),
+      source: 'inventory_initial',
+    });
+  }
+  return { imported: pendingProducts.length, removedDuplicates };
 }
 
 export async function deletePurchase(id) {

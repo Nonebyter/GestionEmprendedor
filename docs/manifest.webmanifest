@@ -1,13 +1,13 @@
 {
-  "name": "Sistema de Gestion",
-  "short_name": "Gestion",
-  "description": "Inventario, compras, ventas y pedidos para emprendedores.",
+  "name": "Yamy Beauty",
+  "short_name": "Yamy Beauty",
+  "description": "Catalogo, inventario, compras, ventas y pedidos de Yamy Beauty.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#e0d5c0",
-  "theme_color": "#2a2521",
+  "background_color": "#f9e8ee",
+  "theme_color": "#38242e",
   "lang": "es",
   "icons": [
     { "src": "./assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

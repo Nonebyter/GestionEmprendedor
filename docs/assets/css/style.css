@@ -38,6 +38,14 @@ h1, h2, h3, .navbar-brand { font-family: Georgia, 'Times New Roman', serif; lett
 /* ------------------------------------------------------------------ navbar */
 .navbar { background-color: var(--v-dark) !important; border-bottom: 3px solid var(--v-gold) !important; }
 .navbar .navbar-brand { color: var(--v-surface) !important; }
+.brand-mark {
+  width: 2rem;
+  height: 2rem;
+  margin-right: .35rem;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: -0.45rem;
+}
 .navbar .nav-link { color: #f4d8e4 !important; }
 .navbar .nav-link:hover, .navbar .nav-link.active { color: #fff !important; }
 .navbar .btn-outline-secondary, .navbar .btn-outline-primary { color: #fde9f1; border-color: #9b6a7d; }
@@ -115,6 +123,8 @@ hr { border-color: var(--v-line); opacity: .6; }
   --bs-table-hover-bg: rgba(196, 45, 103, .07); --bs-table-border-color: var(--v-line);
 }
 .table-light { --bs-table-bg: var(--v-surface-2); --bs-table-color: var(--v-muted); }
+.purchases-table { height: clamp(320px, 52vh, 560px); overflow-y: auto; }
+.purchases-table thead th { position: sticky; top: 0; z-index: 1; }
 
 /* ----------------------------------------------------------------- alertas */
 .alert-danger { background-color: #f9dfe8; border-color: #e5a4ba; color: #79213e; }
