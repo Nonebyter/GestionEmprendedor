@@ -271,8 +271,29 @@ function drawToCompressedDataUrl(source, w, h, maxSize, quality, orientation = 1
 // Si createImageBitmap no esta disponible o falla, usa un ObjectURL (mas tolerante que un dataURL
 // con archivos sin tipo MIME correcto, como los que a veces entrega el picker de Google Fotos)
 // aplicando manualmente la rotacion EXIF leida del propio archivo.
+// WebP y AVIF ya los decodifica el navegador via createImageBitmap/Image sin nada especial.
+// HEIC/HEIF (fotos de iPhone) no lo decodifica ningun navegador salvo Safari/iOS: si ambos intentos
+// fallan y el archivo es HEIC/HEIF se convierte a JPEG con heic2any (cargado solo si hace falta).
 export async function compressImage(file, maxSize = 700, quality = 0.72) {
   if (!file) return '';
+  try {
+    return await decodeAndCompress(file, maxSize, quality);
+  } catch (err) {
+    if (looksLikeHeic(file)) {
+      let jpegBlob;
+      try {
+        jpegBlob = await convertHeicToJpeg(file);
+      } catch {
+        throw new Error('Esta foto es HEIC/HEIF y no se pudo convertir. Prueba exportarla como JPEG.');
+      }
+      return decodeAndCompress(jpegBlob, maxSize, quality);
+    }
+    throw err;
+  }
+}
+
+// Intenta decodificar con createImageBitmap y, si falla, con un ObjectURL + <img>.
+async function decodeAndCompress(file, maxSize, quality) {
   if (typeof createImageBitmap === 'function') {
     try {
       const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
@@ -300,6 +321,32 @@ export async function compressImage(file, maxSize = 700, quality = 0.72) {
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
+}
+
+function looksLikeHeic(file) {
+  const type = (file.type || '').toLowerCase();
+  if (type.includes('heic') || type.includes('heif')) return true;
+  const name = (file.name || '').toLowerCase();
+  return name.endsWith('.heic') || name.endsWith('.heif');
+}
+
+const HEIC2ANY_CDN = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+
+function loadScriptOnce(src) {
+  if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('No se pudo cargar el conversor HEIC.'));
+    document.head.appendChild(s);
+  });
+}
+
+async function convertHeicToJpeg(file) {
+  if (typeof window.heic2any !== 'function') await loadScriptOnce(HEIC2ANY_CDN);
+  const result = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
+  return Array.isArray(result) ? result[0] : result;
 }
 
 export function renderNavbar({ active = '', admin = false } = {}) {
